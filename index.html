@@ -313,6 +313,10 @@
   .note { margin: 8px 0 0; color: var(--soft); font-size: 15px; }
   button:focus-visible, .pick:focus-within { outline: 4px solid var(--sun); outline-offset: 4px; }
 
+  .credits summary { font-size: 15px; color: var(--soft); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; cursor: pointer; }
+  .credits ul { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14px; color: var(--soft); font-family: system-ui, sans-serif; }
+  .credits a { color: var(--ink); }
+
   /* ---------- easter egg ---------- */
   .egg {
     position: absolute;
@@ -453,6 +457,11 @@
       </div>
       <p class="note">Les photos restent sur cet appareil.</p>
     </div>
+    <details class="credits">
+      <summary>Crédits des sons</summary>
+      <ul id="creditList"></ul>
+      <p class="note">Cris d'animaux venant de Wikimedia Commons, raccourcis et volume ajusté. Les sons sous licence CC BY-SA restent sous cette même licence.</p>
+    </details>
     <div class="row">
       <button class="btn" id="testVoice">Tester la voix</button>
       <button class="btn main" id="closePanel">Reprendre</button>
@@ -505,6 +514,38 @@
     { e: "🐥", name: "le poussin",  t: "#fff6c8", c: "Le poussin fait piou, piou !" },
     { e: "🐬", name: "le dauphin",  t: "#dff0ff", c: "Le dauphin saute dans l'eau !" },
   ].map(a => ({ ...a, id: a.e }));
+
+  // Vrais cris enregistrés (dossier « sons »), venus de Wikimedia Commons.
+  // Les animaux absents de cette liste gardent la phrase dite par la voix.
+  // [fichier, emoji, auteur, licence, page source]
+  const SOUND_CREDITS = [
+    ["chien", "🐶", "Amada44", "CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File%3ABarking_of_a_dog.ogg"],
+    ["chat", "🐱", "freemaster2", "CC0", "https://commons.wikimedia.org/wiki/File%3AMeow_of_a_Siamese_cat_-_freemaster2.wav"],
+    ["vache", "🐮", "MichaeltheFox8621", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File%3ASingle_Cow_Moo.ogg"],
+    ["cochon", "🐷", "erdie", "CC BY 3.0", "https://commons.wikimedia.org/wiki/File%3APig_grunt_-_Erdie.ogg"],
+    ["mouton", "🐑", "earthcalling", "domaine public", "https://commons.wikimedia.org/wiki/File%3ASheep_bleating.ogg"],
+    ["cheval", "🐴", "Hü.", "domaine public", "https://commons.wikimedia.org/wiki/File%3AWiehern.ogg"],
+    ["poule", "🐔", "alys", "domaine public", "https://commons.wikimedia.org/wiki/File%3AHen_announcing_shes_lain_an_egg.ogg"],
+    ["canard", "🦆", "WaderClub", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File%3APekin_duck_%26_mallard.ogg"],
+    ["lion", "🦁", "த*உழவன்", "domaine public", "https://commons.wikimedia.org/wiki/File%3ALion_raring-sound1TamilNadu178.ogg"],
+    ["elephant", "🐘", "தகவலுழவன்", "CC0", "https://commons.wikimedia.org/wiki/File%3AElephant_voice_-_trumpeting.ogg"],
+    ["ours", "🐻", "Shizhao", "CC BY 3.0", "https://commons.wikimedia.org/wiki/File%3ABear_growl.ogg"],
+    ["singe", "🐵", "Pawel Fedurek et al.", "CC BY 4.0", "https://commons.wikimedia.org/wiki/File%3APant-hoot_call_made_by_a_male_chimpanzee.ogg"],
+    ["grenouille", "🐸", "MichaeltheFox8621", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File%3ASingle_Frog_Croak.oga"],
+    ["tigre", "🐯", "schots", "CC0", "https://commons.wikimedia.org/wiki/File%3A439280_schots_angry-tiger.wav"],
+    ["zebre", "🦓", "DiegoC472", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File%3AGr%C3%A9vys_zebra_%28Sound_Effects%29.ogg"],
+    ["abeille", "🐝", "Spanac (Free Sounds Library)", "CC BY 3.0", "https://commons.wikimedia.org/wiki/File%3ABee_buzzing_sound_%28animal_noises%29.opus"],
+    ["hibou", "🦉", "Vianney Bajart", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File%3AStrix_aluco_male.oga"],
+    ["pingouin", "🐧", "Hullwarren", "CC BY-SA 3.0", "https://commons.wikimedia.org/wiki/File%3AAudioRoyalPenguins.oga"],
+    ["baleine", "🐳", "auteur inconnu", "domaine public", "https://commons.wikimedia.org/wiki/File%3AAkhumphi1x.ogg"],
+    ["chevre", "🐐", "stephan", "domaine public", "https://commons.wikimedia.org/wiki/File%3AHerd_of_goats_bleating.ogg"],
+    ["dauphin", "🐬", "Felix Blume", "CC0", "https://commons.wikimedia.org/wiki/File%3A161691_felixblume_dolphin-screaming-underwater-in-caribbean-sea-mexico.wav"],
+    ["renard", "🦊", "voir la page source", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File%3ARed_Fox_%28Vulpes_vulpes%29_%28W1CDR0001529_BD12%29.ogg"],
+  ];
+  SOUND_CREDITS.forEach(([file, emoji]) => {
+    const a = ANIMALS.find(x => x.e === emoji);
+    if (a) a.s = "sons/" + file + ".wav";
+  });
   const FAMILY_TINTS = ["#ffe3ec", "#fff1c9", "#e3f6ea", "#e8f4ff", "#f6ecff", "#ffe9d6"];
 
   // ------------------------------------------------------------------
@@ -607,6 +648,7 @@
     setTimeout(finish, 1800 + text.length * 110 / (u.rate || 1));
   }
   function stopSpeech() { speechToken++; if (synth) synth.cancel(); speakBtn.classList.remove("talking"); }
+  function stopAll() { stopSpeech(); soundToken++; stopSound(); }
 
   // ------------------------------------------------------------------
   // Sons (générés, pas de fichier à charger)
@@ -649,6 +691,7 @@
     tone(a * 1.5, t + 0.08, 0.6, "sine", 0.1);
   }
   let noiseBuf = null;
+  let fxQuietUntil = 0;   // pendant le cri d'un animal, le feu d'artifice reste muet
   function popSound(vol = 0.35) {
     if (!ac) return;
     if (!noiseBuf) {
@@ -656,6 +699,7 @@
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     }
+    if (Date.now() < fxQuietUntil) return;
     const t = ac.currentTime;
     const src = ac.createBufferSource(); src.buffer = noiseBuf;
     const bp = ac.createBiquadFilter(); bp.type = "lowpass"; bp.frequency.value = 1800 + Math.random() * 1500;
@@ -695,35 +739,60 @@
   // ------------------------------------------------------------------
   // Mode cochon (easter egg) : le cochon joue le son de la vidéo
   // ------------------------------------------------------------------
-  const PIG_ID = "🐷";
-  let pigBuf = null, pigLoading = null;
-  const pigMode = item => settings.pig && item && item.id === PIG_ID;
-  function loadPig() {
-    if (pigBuf) return Promise.resolve(pigBuf);
-    if (pigLoading) return pigLoading;
+  // Sons enregistrés : chargés une fois puis gardés en mémoire
+  const soundCache = new Map();
+  function loadSound(url) {
     if (!ac) return Promise.resolve(null);
-    pigLoading = fetch("cochon.wav")
-      .then(r => { if (!r.ok) throw new Error("son"); return r.arrayBuffer(); })
-      .then(data => new Promise((res, rej) => ac.decodeAudioData(data, res, rej)))
-      .then(buf => (pigBuf = buf))
-      .catch(() => { pigLoading = null; return null; });
-    return pigLoading;
+    if (!soundCache.has(url)) {
+      const p = fetch(url)
+        .then(r => { if (!r.ok) throw new Error("son"); return r.arrayBuffer(); })
+        .then(data => new Promise((res, rej) => ac.decodeAudioData(data, res, rej)))
+        .catch(() => { soundCache.delete(url); return null; });
+      soundCache.set(url, p);
+    }
+    return soundCache.get(url);
   }
-  // joue le son ; si le fichier manque, on retombe sur la phrase normale
-  function playPig(done, fallbackText) {
+  let soundToken = 0, currentSrc = null;
+  function stopSound() {
+    if (!currentSrc) return;
+    try { currentSrc.onended = null; currentSrc.stop(); } catch (e) {}
+    currentSrc = null;
+  }
+  // joue un son ; si le fichier manque, on dit la phrase de secours
+  function playSound(url, done, fallbackText) {
     ensureAudio();
     stopSpeech();
-    loadPig().then(buf => {
+    const token = ++soundToken;
+    stopSound();
+    loadSound(url).then(buf => {
+      if (token !== soundToken) return;
       if (!buf) { fallbackText ? say(fallbackText, done) : (done && done()); return; }
       const src = ac.createBufferSource();
+      currentSrc = src;
       src.buffer = buf;
       const comp = ac.createDynamicsCompressor();
-      const g = ac.createGain();
-      g.gain.value = 1;
-      src.connect(comp).connect(g).connect(master);
-      src.onended = () => done && done();
+      src.connect(comp).connect(master);
+      let ended = false;
+      const end = () => { if (!ended) { ended = true; done && done(); } };
+      src.onended = end;
+      setTimeout(end, buf.duration * 1000 + 800);   // filet de sécurité
       src.start();
     });
+  }
+  const prefetch = items => items.forEach(a => { if (a.s) loadSound(a.s); });
+
+  const PIG_ID = "🐷";
+  const PIG_URL = "cochon.wav";
+  const pigMode = item => settings.pig && item && item.id === PIG_ID;
+  const loadPig = () => loadSound(PIG_URL);
+  const playPig = (done, fallbackText) => playSound(PIG_URL, done, fallbackText);
+  const hasRealSound = item => pigMode(item) || !!(item && item.s);
+  // le cri de l'animal (vrai son si on l'a, sinon la voix)
+  function playAnimal(item, done, fallbackText) {
+    if (pigMode(item)) playPig(done, fallbackText);
+    else if (item.s) playSound(item.s, done, fallbackText);
+    else if (fallbackText) say(fallbackText, done);
+    else done && done();
   }
   function squirt() {
     if (!ac) return;
@@ -774,7 +843,7 @@
         ty: H * (0.12 + Math.random() * 0.35),
         hue: Math.floor(Math.random() * 360)
       });
-      if (ac) tone(300, ac.currentTime, 0.4, "sine", 0.05, 900);
+      if (ac && Date.now() >= fxQuietUntil) tone(300, ac.currentTime, 0.4, "sine", 0.05, 900);
       startFx();
     }, delay);
   }
@@ -912,6 +981,7 @@
     board.innerHTML = "";
     current.forEach((a, i) => board.appendChild(makeCard(a, i, onQuizTap)));
     layout();
+    prefetch(current);
     locked = true;
     later(() => {
       say(question(), () => { locked = false; });
@@ -929,8 +999,10 @@
     clearTimeout(hintTimer);
     [...board.children].forEach(c => { if (c !== el) c.classList.add("fade"); c.classList.remove("hint", "no"); });
     el.classList.add("win");
-    const pigWin = pigMode(target);
-    if (!pigWin) successSound();
+    // un animal qui a un vrai cri : on n'entend que lui
+    const realCry = mode !== "family" && hasRealSound(target);
+    if (realCry) fxQuietUntil = Date.now() + 3200;
+    else successSound();
     const r = el.getBoundingClientRect();
     stars++;
     const full = stars >= STAR_GOAL;
@@ -955,7 +1027,8 @@
         newRound();
       }, Math.max(600, minShow - (Date.now() - winAt)));
     };
-    if (pigWin) playPig(() => { if (full) say(line, next); else next(); }, line);
+    const fullLine = `Bravo${kid ? " " + kid : ""} ! Tu as gagné toutes les étoiles !`;
+    if (realCry) playAnimal(target, () => { if (full) say(fullLine, next); else next(); }, line);
     else later(() => say(line, next), 350);
   }
 
@@ -1003,6 +1076,7 @@
     board.innerHTML = "";
     discoverSet.forEach((a, i) => board.appendChild(makeCard(a, i, onDiscoverTap)));
     layout();
+    prefetch(discoverSet);
   }
   function onDiscoverTap(item, el) {
     const now = Date.now();
@@ -1019,12 +1093,13 @@
       el.classList.remove("big");
       if (heard.size >= discoverSet.length) later(newDiscover, 900);
     };
-    if (pigMode(item)) playPig(after, item.c);
+    // le vrai cri tout de suite, puis la voix dit le nom
+    if (hasRealSound(item)) playAnimal(item, () => say(cap(item.name) + " !", after), item.c);
     else say(item.c, after);
   }
   document.getElementById("next").addEventListener("click", () => {
     ensureAudio();
-    stopSpeech();
+    stopAll();
     chime();
     newDiscover();
   });
@@ -1087,7 +1162,7 @@
     gen++;
     mode = null;
     clearTimeout(hintTimer);
-    stopSpeech();
+    stopAll();
     board.innerHTML = "";
     renderMenu();
     menu.hidden = false;
@@ -1157,7 +1232,7 @@
     gen++;
     locked = true;
     clearTimeout(hintTimer);
-    stopSpeech();
+    stopAll();
     panel.hidden = false;
     if (section === "family") {
       setTimeout(() => document.getElementById("famSection").scrollIntoView({ block: "start", behavior: "smooth" }), 50);
@@ -1175,6 +1250,18 @@
   document.getElementById("toMenu").addEventListener("click", () => { panel.hidden = true; goMenu(); });
   document.getElementById("testVoice").addEventListener("click", () => {
     ensureAudio(); pickVoice(); say("Où est le chien ? Le chien fait ouaf, ouaf !", null, true);
+  });
+
+  // ---------- crédits des sons ----------
+  const creditList = document.getElementById("creditList");
+  SOUND_CREDITS.forEach(([file, emoji, author, license, page]) => {
+    const a = ANIMALS.find(x => x.e === emoji);
+    const li = document.createElement("li");
+    li.append(`${emoji} ${a ? cap(a.name) : file} : ${author}, ${license} · `);
+    const link = document.createElement("a");
+    link.href = page; link.target = "_blank"; link.rel = "noopener"; link.textContent = "source";
+    li.appendChild(link);
+    creditList.appendChild(li);
   });
 
   // ---------- gestion des photos ----------
