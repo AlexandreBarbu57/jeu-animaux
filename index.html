@@ -313,6 +313,34 @@
   .note { margin: 8px 0 0; color: var(--soft); font-size: 15px; }
   button:focus-visible, .pick:focus-within { outline: 4px solid var(--sun); outline-offset: 4px; }
 
+  /* ---------- easter egg ---------- */
+  .egg {
+    position: absolute;
+    left: max(12px, env(safe-area-inset-left, 0px));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    font-size: 34px; line-height: 1;
+    background: none; border: 0; padding: 8px;
+    cursor: pointer;
+  }
+  .egg:active { transform: scale(.9) rotate(-10deg); }
+  .egg.on::after { content: "🐷"; position: absolute; right: -4px; top: -4px; font-size: 18px; }
+  .toast {
+    position: fixed; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 25;
+    background: #fff;
+    color: var(--ink);
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(28px, 6vmin, 56px);
+    padding: .5em 1.1em;
+    border-radius: 999px;
+    box-shadow: 0 10px 0 #ffc2d4, 0 0 0 6px #ffe3ec;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: toastpop .5s cubic-bezier(.3,1.7,.5,1) both;
+  }
+  @keyframes toastpop { from { transform: translate(-50%, -50%) scale(0) rotate(-8deg); } to { transform: translate(-50%, -50%) scale(1) rotate(0); } }
+
   @media (prefers-reduced-motion: reduce) {
     .animal { animation-duration: .01s !important; animation-iteration-count: 1 !important; }
   }
@@ -373,7 +401,10 @@
     </button>
   </div>
   <p class="hint">Monte le son. Pour les réglages et les photos, garde le doigt appuyé sur la roue en haut à droite.</p>
+  <button class="egg" id="egg" aria-label="Surprise">🔫</button>
 </div>
+
+<div class="toast" id="toast" role="status" hidden></div>
 
 <div class="panel" id="panel" hidden>
   <div class="sheet" role="dialog" aria-label="Réglages">
@@ -479,7 +510,7 @@
   // ------------------------------------------------------------------
   // Réglages (gardés sur cet appareil)
   // ------------------------------------------------------------------
-  const settings = { count: "auto", pool: "easy", rate: "0.9", kid: DEFAULT_KID };
+  const settings = { count: "auto", pool: "easy", rate: "0.9", kid: DEFAULT_KID, pig: false };
   try { Object.assign(settings, JSON.parse(localStorage.getItem("arthur-animaux") || "{}")); } catch (e) {}
   const saveSettings = () => { try { localStorage.setItem("arthur-animaux", JSON.stringify(settings)); } catch (e) {} };
 
@@ -659,6 +690,51 @@
       o.start(at); o.stop(at + d + 0.05);
       at += d + 0.03;
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Mode cochon (easter egg) : le cochon joue le son de la vidéo
+  // ------------------------------------------------------------------
+  const PIG_ID = "🐷";
+  let pigBuf = null, pigLoading = null;
+  const pigMode = item => settings.pig && item && item.id === PIG_ID;
+  function loadPig() {
+    if (pigBuf) return Promise.resolve(pigBuf);
+    if (pigLoading) return pigLoading;
+    if (!ac) return Promise.resolve(null);
+    pigLoading = fetch("cochon.wav")
+      .then(r => { if (!r.ok) throw new Error("son"); return r.arrayBuffer(); })
+      .then(data => new Promise((res, rej) => ac.decodeAudioData(data, res, rej)))
+      .then(buf => (pigBuf = buf))
+      .catch(() => { pigLoading = null; return null; });
+    return pigLoading;
+  }
+  // joue le son ; si le fichier manque, on retombe sur la phrase normale
+  function playPig(done, fallbackText) {
+    ensureAudio();
+    stopSpeech();
+    loadPig().then(buf => {
+      if (!buf) { fallbackText ? say(fallbackText, done) : (done && done()); return; }
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      const comp = ac.createDynamicsCompressor();
+      const g = ac.createGain();
+      g.gain.value = 1;
+      src.connect(comp).connect(g).connect(master);
+      src.onended = () => done && done();
+      src.start();
+    });
+  }
+  function squirt() {
+    if (!ac) return;
+    if (!noiseBuf) popSound(0.0001);
+    const t = ac.currentTime;
+    const src = ac.createBufferSource(); src.buffer = noiseBuf;
+    const hp = ac.createBiquadFilter(); hp.type = "bandpass"; hp.frequency.setValueAtTime(3000, t); hp.frequency.exponentialRampToValueAtTime(900, t + 0.35);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    src.connect(hp).connect(g).connect(master);
+    src.start(t); src.stop(t + 0.45);
   }
 
   // ------------------------------------------------------------------
@@ -853,7 +929,8 @@
     clearTimeout(hintTimer);
     [...board.children].forEach(c => { if (c !== el) c.classList.add("fade"); c.classList.remove("hint", "no"); });
     el.classList.add("win");
-    successSound();
+    const pigWin = pigMode(target);
+    if (!pigWin) successSound();
     const r = el.getBoundingClientRect();
     stars++;
     const full = stars >= STAR_GOAL;
@@ -870,16 +947,16 @@
       ? `Bravo${kid ? " " + kid : ""} ! ${praise} Tu as gagné toutes les étoiles !`
       : `${cheer} ${praise}`;
     const winAt = Date.now();
-    later(() => {
-      say(line, () => {
-        // laisser le feu d'artifice se terminer avant la manche suivante
-        const minShow = full ? 5200 : 3000;
-        later(() => {
-          if (full) { stars = 0; renderStars(); }
-          newRound();
-        }, Math.max(600, minShow - (Date.now() - winAt)));
-      });
-    }, 350);
+    const next = () => {
+      // laisser le feu d'artifice se terminer avant la manche suivante
+      const minShow = full ? 5200 : 3000;
+      later(() => {
+        if (full) { stars = 0; renderStars(); }
+        newRound();
+      }, Math.max(600, minShow - (Date.now() - winAt)));
+    };
+    if (pigWin) playPig(() => { if (full) say(line, next); else next(); }, line);
+    else later(() => say(line, next), 350);
   }
 
   function lose(item, el) {
@@ -891,10 +968,9 @@
     if (settings.count === "auto" && roundErrors === 2 && level > 2) level--;
     el.classList.remove("no"); void el.offsetWidth; el.classList.add("no");
     setTimeout(() => el.classList.remove("no"), 600);
-    wrongSound();
     clearTimeout(hintTimer);
     const g = gen;
-    hintTimer = setTimeout(() => {
+    const explain = () => {
       if (g !== gen) return;
       say(`Ça, c'est ${item.name}. ${question()}`, () => {
         if (roundErrors >= 2) {
@@ -902,7 +978,10 @@
           t && t.classList.add("hint");
         }
       });
-    }, 1150);
+    };
+    if (pigMode(item)) { playPig(explain); return; }
+    wrongSound();
+    hintTimer = setTimeout(explain, 1150);
   }
 
   speakBtn.addEventListener("click", () => {
@@ -936,10 +1015,12 @@
     burst(r.left + r.width / 2, r.top + r.height / 2, Math.random() * 360, 40, 0.15);
     chime();
     heard.add(item.id);
-    say(item.c, () => {
+    const after = () => {
       el.classList.remove("big");
       if (heard.size >= discoverSet.length) later(newDiscover, 900);
-    });
+    };
+    if (pigMode(item)) playPig(after, item.c);
+    else say(item.c, after);
   }
   document.getElementById("next").addEventListener("click", () => {
     ensureAudio();
@@ -993,6 +1074,7 @@
     menu.hidden = true;
     homeBtn.hidden = false;
     keepAwake();
+    if (settings.pig) loadPig();
     stars = 0; renderStars();
     level = 2; cleanStreak = 0; recent = []; discoverSet = [];
     board.innerHTML = "";
@@ -1012,6 +1094,28 @@
     homeBtn.hidden = true;
   }
   document.querySelectorAll(".tile").forEach(t => t.addEventListener("click", () => startMode(t.dataset.mode)));
+
+  // ---------- easter egg : le pistolet à eau ----------
+  const egg = document.getElementById("egg");
+  const toast = document.getElementById("toast");
+  let toastTimer = null;
+  function showToast(text) {
+    toast.textContent = text;
+    toast.hidden = true; void toast.offsetWidth; toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 2200);
+  }
+  const syncEgg = () => egg.classList.toggle("on", !!settings.pig);
+  egg.addEventListener("click", () => {
+    ensureAudio();
+    settings.pig = !settings.pig;
+    saveSettings();
+    syncEgg();
+    squirt();
+    showToast(settings.pig ? "Mode 🐷 activé" : "Mode 🐷 désactivé");
+    if (settings.pig) loadPig();
+  });
+  syncEgg();
 
   // ------------------------------------------------------------------
   // Réglages parent : appui long sur la roue
