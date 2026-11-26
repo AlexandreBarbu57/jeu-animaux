@@ -1,5 +1,5 @@
 // Garde le jeu sur l'appareil pour qu'il marche sans internet.
-const CACHE = "animaux-20261126190023";
+const CACHE = "animaux-20261126190626";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
